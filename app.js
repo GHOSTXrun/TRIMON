@@ -1,3 +1,4 @@
+import {arenaRequest,downloadTrades} from './browser-arena.mjs';
 'use strict';
 const $=s=>document.querySelector(s);
 const definitions=[{id:'fire',name:'Charmander',alias:'CHARMANDER / MOMENTUM',type:'Aggressive trend',color:'#ff965c',limit:.85},{id:'grass',name:'Bulbasaur',alias:'BULBASAUR / DEFENSIVE',type:'Defensive allocation',color:'#a9ed7a',limit:.30},{id:'water',name:'Squirtle',alias:'SQUIRTLE / SCALPER',type:'Short-term reversion',color:'#69cffa',limit:.55}];
@@ -20,7 +21,7 @@ let hoverX=null,chartFrame=0,chartData=null,chartBusy=false;
 const chartColors=['#ff965c','#a9ed7a','#69cffa'];
 async function refreshChart(){
  if(chartBusy)return;chartBusy=true;const selected=market;
- try{const r=await fetch('/api/chart?market='+selected,{cache:'no-store',signal:AbortSignal.timeout(16000)});if(!r.ok)throw Error();const data=await r.json();if(selected!==market)return;if(!data.bars?.length)throw Error();chartData=data;
+ try{const r=await arenaRequest('/api/chart?market='+selected,{cache:'no-store',signal:AbortSignal.timeout(16000)});if(!r.ok)throw Error();const data=await r.json();if(selected!==market)return;if(!data.bars?.length)throw Error();chartData=data;
  $('#source').textContent=(data.source||'Public market data')+' spot reference · '+market+' · simulated perps';$('#price').textContent=fmt(data.lastPrice)+' USDT';$('#clock').textContent='Updated '+new Date(data.fetchedAt*1000).toLocaleTimeString('en-US',{hour12:false});
  $('#chart-state').textContent='Spot reference refreshes every 10 seconds · Simulated positions settle on completed minutes';$('#chart-state').classList.remove('chart-error');
  $('#range').textContent=time(data.bars[0][0])+' — '+time(data.bars.at(-1)[0]);draw();renderPositions();
@@ -58,7 +59,7 @@ function draw(){
 let stateBusy=false,backendGeneration=0;
 async function refresh(){
  if(stateBusy)return;stateBusy=true;const g=backendGeneration;$('#restart').disabled=true;
- try{const r=await fetch('/api/arena?market='+market,{signal:AbortSignal.timeout(20000),cache:'no-store'});if(!r.ok)throw Error('Arena connection failed');const s=await r.json();if(g!==backendGeneration)return;if(!s.bots||!Array.isArray(s.history))throw Error('Service not ready');
+ try{const r=await arenaRequest('/api/arena?market='+market,{signal:AbortSignal.timeout(20000),cache:'no-store'});if(!r.ok)throw Error('Arena connection failed');const s=await r.json();if(g!==backendGeneration)return;if(!s.bots||!Array.isArray(s.history))throw Error('Service not ready');
  briefState=s;bots=s.bots;history=s.history;logs=s.logs;totalTrades=s.totalTrades;lastPrice=s.lastPrice;lastTime=s.lastT+60;phase=s.finished?'ended':s.error||!s.lastPrice?'loading':'live';render();
  $('#status').textContent=s.error?'Feed interrupted · Records saved':s.finished?'Season settled':s.lagSeconds>120?'Backfilling historical session':'Simulation active · Minute settlement';
  $('#source').textContent=(s.source||'Public market data')+' spot reference · '+market+' · simulated perps';
@@ -69,9 +70,9 @@ async function refresh(){
  $('#chart').setAttribute('aria-label',market+' 1-minute candles and simulated trades; '+bots.map(b=>b.name+' position '+b.qty.toFixed(6)).join('; '));
  }catch(e){if(g===backendGeneration){$('#status').textContent='Service unavailable';$('#engine-ready').textContent='Awaiting service connection';$('#error').hidden=false;$('#error').textContent='Unable to load the season. Please refresh later. No substitute prices or fabricated returns have been generated.';}}finally{stateBusy=false;$('#restart').disabled=false;if(g!==backendGeneration)refresh();}
 }
-function changeMarket(){market=$('#market').value;backendGeneration++;briefState=null;bots=definitions.map(d=>({...d,equity:1000,drawdown:0,qty:0,trades:0,dead:false,reason:'Loading market ledger…'}));history=[];logs=[];lastPrice=0;lastTime=0;totalTrades=0;phase='loading';hoverX=null;chartData=null;render();$('#chart-title').textContent=market.replace('-',' / ');refreshChart();$('#export').href='/api/trades.csv?market='+market;refresh();}
+function changeMarket(){market=$('#market').value;backendGeneration++;briefState=null;bots=definitions.map(d=>({...d,equity:1000,drawdown:0,qty:0,trades:0,dead:false,reason:'Loading market ledger…'}));history=[];logs=[];lastPrice=0;lastTime=0;totalTrades=0;phase='loading';hoverX=null;chartData=null;render();$('#chart-title').textContent=market.replace('-',' / ');refreshChart();$('#export').href='#journal';refresh();}
 $('#restart').onclick=refresh;$('#market').onchange=changeMarket;
-$('#code').onclick=async()=>{$('#dialog').showModal();$('#code-text').textContent='Loading server strategy…';try{const r=await fetch('/api/strategy',{signal:AbortSignal.timeout(8000)});if(!r.ok)throw Error();const data=await r.json();$('#code-text').textContent=data.code+'\n\n'+JSON.stringify(data.rules,null,2);}catch{$('#code-text').textContent='Strategy service unavailable. Please try again.';}};$('#close').onclick=()=>$('#dialog').close();
+$('#code').onclick=async()=>{$('#dialog').showModal();$('#code-text').textContent='Loading server strategy…';try{const r=await arenaRequest('/api/strategy',{signal:AbortSignal.timeout(8000)});if(!r.ok)throw Error();const data=await r.json();$('#code-text').textContent=data.code+'\n\n'+JSON.stringify(data.rules,null,2);}catch{$('#code-text').textContent='Strategy service unavailable. Please try again.';}};$('#close').onclick=()=>$('#dialog').close();
 window.addEventListener('resize',draw);$('#chart').addEventListener('pointermove',e=>{hoverX=e.clientX-e.currentTarget.getBoundingClientRect().left;cancelAnimationFrame(chartFrame);chartFrame=requestAnimationFrame(draw);});$('#chart').addEventListener('pointerleave',()=>{hoverX=null;draw();});$('#chart').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Escape'].includes(e.key))return;e.preventDefault();hoverX=e.key==='Escape'?null:Math.max(12,Math.min(e.currentTarget.clientWidth-78,(hoverX??12)+(e.key==='ArrowRight'?20:-20)));draw();});
 cards();initSupport();changeMarket();setInterval(refresh,15000);setInterval(refreshChart,10000);
 if(document.modelContext?.registerTool)Promise.resolve(document.modelContext.registerTool({name:'read_trimon_state',description:'Read market timestamps and recorded account results from the TRIMON simulation.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw Error('No arguments accepted');return {market,phase,marketTime:lastTime,price:lastPrice,bots:bots.map(({name,equity,drawdown,trades,dead})=>({name,equity,drawdown,trades,dead}))};}})).catch(()=>{});
@@ -107,3 +108,6 @@ function renderReport(){
  $('#report-cards').innerHTML=r.rows.map(x=>{const d=definitions.find(d=>d.id===x.agent);return `<article class="signal-card" style="--c:${d.color}"><h3>${d.name}</h3><span class="insight-note">Daily equity change / USDT</span><strong class="report-pnl ${x.pnl>=0?'positive':'negative'}">${x.pnl>=0?'+':''}${fmt(x.pnl)}</strong><dl><div><dt>Daily return</dt><dd>${pct(x.returnPct)}</dd></div><div><dt>Simulated trades</dt><dd>${x.trades} trades</dd></div><div><dt>Opening → closing equity</dt><dd>${fmt(x.start)} → ${fmt(x.end)}</dd></div><div><dt>Fees and simulated slippage</dt><dd>${fmt(x.cost)} USDT</dd></div></dl><p>${x.catchup?x.catchup+' backfilled trades':'No backfilled trades on this day'}</p></article>`;}).join('');
 }
 $('#day-today').onclick=()=>{reportDay=0;renderReport();};$('#day-yesterday').onclick=()=>{reportDay=1;renderReport();};
+
+$('#export').onclick=e=>{e.preventDefault();downloadTrades(market);};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){refresh();refreshChart();}});
