@@ -1,0 +1,4 @@
+import {sqliteTable,text,integer,real,primaryKey,index} from 'drizzle-orm/sqlite-core';
+export const arena=sqliteTable('arena',{market:text('market').primaryKey(),version:integer('version').notNull(),state:text('state').notNull(),writeToken:text('write_token').notNull()});
+export const snapshots=sqliteTable('snapshots',{market:text('market').notNull(),t:integer('t').notNull(),values:text('values_json').notNull(),price:real('price').notNull()},t=>[primaryKey({columns:[t.market,t.t]})]);
+export const trades=sqliteTable('trades',{id:text('id').primaryKey(),market:text('market').notNull(),t:integer('t').notNull(),agent:text('agent').notNull(),action:text('action').notNull(),price:real('price').notNull(),amount:real('amount').notNull(),cost:real('cost').notNull(),reason:text('reason').notNull(),recordedAt:integer('recorded_at').notNull(),catchup:integer('catchup').notNull()},t=>[index('trades_market_time').on(t.market,t.t)]);

@@ -1,0 +1,1 @@
+{"name":"trimon-arena","version":"0.2.0","private":true,"type":"module","scripts":{"build":"node scripts/build.mjs","start":"node --use-env-proxy server.cjs","dev":"node --use-env-proxy server.cjs","db:generate":"drizzle-kit generate","test":"node --test tests/*.test.mjs"},"devDependencies":{"drizzle-kit":"0.31.10","drizzle-orm":"0.45.2"}}
